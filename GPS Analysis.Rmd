@@ -1,0 +1,1069 @@
+---
+title: "GPS Analysis"
+author: "Najja Osiomwan"
+date: "10/27/2020"
+output: html_document
+---
+
+### Google Play Store Analysis
+
+This is an exploratory data analysis project to examine how different variables such as the size or the price of an app affect the ratings and amount of reviews or installs an app recieves. After exploring the relationship between variables I will attempt to answer some questions about the data by testing for significance and create a linear regression model that can predict the amount of install an app will recieve based on the variables available in the dataset.
+
+# Data Cleaning
+```{r Libraries & Data Import}
+library(psych) 
+library(ggplot2)
+library(gmodels) 
+library(MASS)
+library(car)
+library(cluster)  
+library(fpc)  
+library(corrplot)
+library(FactoMineR)
+library(corrplot)
+library(scatterplot3d) 
+library(readr)
+library(lubridate)
+library(tidyr)
+library(dplyr)
+library(zoo)
+library(Hmisc)
+library(gplots)
+library(mosaicCore)
+library(tidyverse)
+library(caret)
+library(nnet)
+library(plotrix)
+
+g_apps <- read.csv("Google-Playstore-Full.csv", header = T)
+head(g_apps)
+str(g_apps)
+summary(g_apps)
+```
+
+Looks like there are some rows with misaligned data and columns 12, 13, 14 and 15 are all NA (completely blank) so I'll remove those columns.
+
+```{r Misalignment}
+# Removing misaligned rows
+m1 <- which(as.character(g_apps$X) == "1.0.0")
+m2 <- which(as.character(g_apps$X) == "1.0.1")
+m3 <- which(as.character(g_apps$X) == "Varies with device")
+m4 <- which(as.character(g_apps$X) == "1.1")
+m5 <- which(as.character(g_apps$X) == "1.15.1")
+m6 <- which(as.character(g_apps$X) == "1.2")
+m7 <- which(as.character(g_apps$X) == "1.54")
+m8 <- which(as.character(g_apps$X) == "1.6")
+m9 <- which(as.character(g_apps$X) == "2.2.0")
+m10 <- which(as.character(g_apps$X) == "2.3")
+m11 <- which(as.character(g_apps$X) == "4.0.0.0")
+m12 <- which(as.character(g_apps$X) == "4.0.1")
+m13 <- which(as.character(g_apps$X) == "4.0.3 and up")
+m14 <- which(as.character(g_apps$X) == "April 2, 2019")
+m15 <- which(as.character(g_apps$X) == "Everyone")
+m16 <- which(as.character(g_apps$X) == "Varies with device")
+
+misaligned <- c(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11, m12, m13, m14, m15, m16)
+g_apps1 <- g_apps[-misaligned, ]
+head(g_apps1) # Columns X - X.3 are now empty, let's drop those columns from the dataset
+g_apps1 <- g_apps1[,-c(12, 13, 14,15)]
+summary(g_apps1)
+```
+
+Formating the data for analysis. 
+
+```{r formating}
+g_apps2 <- g_apps1
+# Removing k and M from Size variable
+g_apps2$Size <- as.character(g_apps2$Size)
+g_apps2$Size <- gsub("\\.5k", "500", g_apps2$Size)
+g_apps2$Size <- gsub("\\.1M", "100000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.2M", "200000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.3M", "300000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.4M", "400000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.5M", "500000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.6M", "600000", g_apps2$Size)  
+g_apps2$Size <- gsub("\\.7M", "700000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.8M", "800000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.9M", "900000", g_apps2$Size)
+g_apps2$Size <- gsub("\\.0M","000000",g_apps2$Size)
+g_apps2$Size <- gsub("\\M", "000000", g_apps2$Size)
+g_apps2$Size <- gsub("\\k", "000", g_apps2$Size)
+g_apps2$Size <- gsub("\\,", "", g_apps2$Size)
+g_apps2$Size <- gsub("\\+", "", g_apps2$Size)
+g_apps2$Size <- as.factor(g_apps2$Size)
+
+# Removing + and , from Installs 
+g_apps2$Installs <- gsub("\\+", "", g_apps2$Installs)
+g_apps2$Installs <- gsub(",", "", g_apps2$Installs)
+g_apps2$Installs <- as.factor(g_apps2$Installs)
+
+# Remove the $ from Price
+g_apps2$Price <- gsub("\\$", "", g_apps2$Price)
+g_apps2$Price <- as.factor(g_apps2$Price)
+
+# Change last updated to date format
+g_apps2$Last.Updated <- gsub("January", "1-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("February", "2-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("March", "3-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("April", "4-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("May", "5-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("June", "6-", g_apps2$Last.Updated)  
+g_apps2$Last.Updated <- gsub("July", "7-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("August", "8-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("September", "9-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("October", "10-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("November", "11-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub("December", "12-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub(",", "-", g_apps2$Last.Updated)
+g_apps2$Last.Updated <- gsub(" ", "", g_apps2$Last.Updated)
+
+g_apps2$Last.Updated <- strptime(g_apps2$Last.Updated,format="%m-%d-%Y")
+g_apps2$Last.Updated <- as.Date(g_apps2$Last.Updated, format = "%d-%m-%y")
+
+# Remove "and up" from Minimum Version
+g_apps2$Minimum.Version <- gsub(" and up", "+", g_apps2$Minimum.Version)
+g_apps2$Minimum.Version <- as.factor(g_apps2$Minimum.Version)
+
+summary(g_apps2)
+```
+
+## Univariate Analysis
+
+Now I'll take a look at each variable and check for a normal distribution since the tests I'll be performing assume normal distribution.
+
+```{r Rating}
+g_apps2$Rating <- as.numeric(as.character(g_apps2$Rating))
+g_apps2$Reviews <- as.numeric(as.character(g_apps2$Reviews))
+g_apps3 <- g_apps2
+
+# -------- Rating ----------#
+rating <- g_apps3$Rating
+hist(rating, breaks = 100, col="#00DCFF")
+
+summary(rating)
+
+len_rate <- length(which(rating>=3))
+len_rateP <- len_rate/(length(rating))
+len_rateP # 96.9% of apps are rating 3 or higher
+
+# Look for normal distribution
+par(mfrow=c(3,1))
+plot(density(rating, na.rm = T))
+plot(density(log(rating), na.rm = T))
+plot(density(sqrt(rating), na.rm = T)) 
+
+low_outliers <- fivenum(rating, na.rm = T)[2]-IQR(rating, na.rm = T)*1.5
+low_outliers # 3.07
+low <- which(rating < low_outliers)
+length(low) # 11627 lower outliers because the data is left skewed, removing for normal distribution
+```
+
+We can see that the all transformations of the data are skewed, so I'll try removing low outliers
+
+```{r Rating (2)}
+g_apps4 <- g_apps3[-low,]
+par(mfrow=c(1,1))
+hist(g_apps4$Rating, col = c("#00DCFF"), main = "Distribution of Ratings", breaks = 100)
+plot(density(g_apps4$Rating, na.rm = T), col = "#444444")
+plot(density(log(g_apps4$Rating), na.rm = T), col="#444444", lwd=2.5)
+plot(density(sqrt(g_apps4$Rating), na.rm = T), col="#444444", lwd=2.5)
+
+hist(g_apps4$Rating, col=c("#00DCFF"), xlim=c(3,5), freq = F, breaks=seq(.5, 20, 0.1),
+     xlab = "App Rating", main = "Distribution of App Ratings")
+rug(jitter(g_apps4$Rating), col="#444444")
+lines(density(g_apps4$Rating), col="#FFD800", lwd=2)
+box()
+boxplot(g_apps4$Rating, main="Ratings", col="#00DCFF")
+```
+
+The ratings are still left skewed, but I will leave it as is. 
+
+```{r Category}
+# --------- Category --------# 
+cat <- table(g_apps4$Category)
+sortcat <- sort(cat, decreasing = TRUE)
+pcat <- round(prop.table(cat), 2)
+pcat <- sort(pcat, decreasing = TRUE)
+pcat
+```
+
+Too many catergories; grouping them together for a more even spread.
+
+```{r Category (2)}
+g_apps5 <- g_apps4
+g_apps5$Category <- as.character(g_apps5$Category)
+
+g_apps5$Category[g_apps5$Category %in% "BUSINESS"] <- "EDUCATION"
+g_apps5$Category[g_apps5$Category %in% "FINANCE"] <- "EDUCATION"
+g_apps5$Category[g_apps5$Category %in% "ETEA & MDCAT"] <- "EDUCATION"
+g_apps5$Category[g_apps5$Category %in% "PARENTING"] <- "EDUCATION"
+g_apps5$Category[g_apps5$Category %in% "BOOKS_AND_REFERENCE"] <- "EDUCATION"
+g_apps5$Category[g_apps5$Category %in% "LIBRARIES_AND_DEMO"] <- "EDUCATION"
+
+g_apps5$Category[g_apps5$Category %in% "HEALTH_AND_FITNESS"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "FOOD_AND_DRINK"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "MEDICAL"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "BEAUTY"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "HEALTH"] <- "LIFESTYLE"
+
+
+g_apps5$Category[g_apps5$Category %in% "NEWS_AND_MAGAZINES"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "SHOPPING"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "TRAVEL_AND_LOCAL"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "ART_AND_DESIGN"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "AUTO_AND_VEHICLES"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "Mexpost)"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "not notified you follow -"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "TÔøΩrk Alfabesi"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "Alfabe ÔøΩ?ren"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% ")"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "6"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "Tour Guide"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "TRAVEL"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "BEAUTY"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "Mexpost)"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "Breaking News"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "Channel 2 News"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "DATING"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "EVENTS"] <- "LIFESTYLE"
+g_apps5$Category[g_apps5$Category %in% "SOCIAL"] <- "LIFESTYLE"
+
+
+g_apps5$Category[g_apps5$Category %in% "PHOTOGRAPHY"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "COMMUNICATION"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "MAPS_AND_NAVIGATION"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "VIDEO_PLAYERS"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "WEATHER"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "HOUSE_AND_HOME"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "VIDEO_PLAYERS"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "Gate ALARM"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "Islamic Name Boy & Girl+Meaning"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "PERSONALIZATION"] <- "PRODUCTIVITY"
+g_apps5$Category[g_apps5$Category %in% "TOOLS"] <- "PRODUCTIVITY"
+
+
+g_apps5$Category[g_apps5$Category %in% "MUSIC_AND_AUDIO"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "Romantic Song Music Love Songs"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "Speaker Pro 2019"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "super loud speaker booster"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "MUSIC_AND_AUDIO"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "SPORTS"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_ACTION"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_ARCADE"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_CASUAL"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_EDUCATIONAL"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_PUZZLE"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_SIMULATION"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "COMICS"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_ADVENTURE"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_BOARD"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_CARD"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_CASINO"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_MUSIC"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_RACING"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_ROLE_PLAYING"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_SPORTS"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_STRATEGY"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_TRIVIA"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "GAME_WORD"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "Podcasts"] <- "ENTERTAINMENT"
+g_apps5$Category[g_apps5$Category %in% "MUSIC"] <- "ENTERTAINMENT"
+
+g_apps5$Category <- as.factor(g_apps5$Category)
+
+ct <- table(g_apps5$Category)
+pct <- prop.table(ct)
+pct <- round(pct, 2)
+pct
+
+par(mfrow=c(1,1))
+barplot(pct, main = "Proportion of Apps by Category", col = c("#00DCFF", "#F83648", "#FFD800", "#04F075"), ylim = c(0,0.5), xlab = "Category of App", ylab = "Proportion of Apps")
+legend("topright", fill = c("#00DCFF", "#F83648", "#FFD800", "#04F075"), legend = levels(g_apps5$Category))
+box()
+```
+
+```{r Reviews}
+g_apps6 <- g_apps5
+
+str(g_apps6$Reviews)
+summary(g_apps6$Reviews)
+hist(g_apps6$Reviews, breaks = 10, col = "#04F075")
+plot(density(g_apps6$Reviews)) # Nowhere near normal distribution
+boxplot(g_apps6$Reviews, col = "#00DCFF")
+options(scipen = 99) 
+
+par(mfrow=c(1,1))
+plot(density(log(g_apps6$Reviews)))
+hist(log(g_apps6$Reviews), col = "#FFD800", breaks = 100) # Way better, but right skewed a bit
+
+# Removing outliers
+log_reviews <- log(g_apps6$Reviews)
+revup_limit <- fivenum(log_reviews, na.rm=T)[4]+IQR(log_reviews)*1.5
+revup_outliers <- which(log_reviews > revup_limit)
+length(revup_outliers) # 2796 outliers
+
+revlow_limit <- fivenum(log_reviews)[2]-IQR(log_reviews)*1.5
+revlow_outliers <- which(log_reviews < revlow_limit)
+length(revlow_outliers) # 0 outliers
+
+g_apps6$Reviews <- log(g_apps6$Reviews) # Using the log transformation, because although it is right skewed, it's more normally distruted
+g_apps7 <- g_apps6[-revup_outliers,]
+plot(density(g_apps7$Reviews), main = "Density Plot log Reviews", lwd = 3, xlab = "Log of Reviews", col="#00DCFF")
+```
+
+```{r Installs}
+#-------------- Installs ---------------#
+summary(g_apps7$Installs)
+summary(as.numeric(as.character(g_apps7$Installs)))
+g_apps7$Installs <- as.numeric(as.character(g_apps7$Installs))
+hist(g_apps7$Installs, col = "#00DCFF", breaks = 1000)
+plot(density(g_apps7$Installs), col = "#00DCFF", lwd=3) 
+
+# Why is the data so skewed?
+toohigh <- which(g_apps7$Installs %in% 500000000)
+length(toohigh) # Only 5 apps have up to 5 million installs
+boxplot(g_apps7$Installs)
+
+# Let me try data transformation to see if I can find a more normal distribution.
+plot(density(log(g_apps7$Installs)), col = "#04F075", lwd = 3)
+plot(density(sqrt(g_apps7$Installs)), col = "#04F075", lwd = 3)
+plot(density(g_apps7$Installs^(1/3)), col = "#04F075", lwd = 3) # None of these data transformations achieve normal distribution.
+
+# As a numeric variable, Installs is extremely skewed so I will convert it to a factor with 5 groups.
+g_apps7$Installs <- as.character(g_apps7$Installs)
+g_apps7$Installs[g_apps7$Installs %in% c(0,1,5,10,50,100,500)] <- "0-500"
+g_apps7$Installs[g_apps7$Installs %in% c(1000,5000)] <- "1000-10000"
+g_apps7$Installs[g_apps7$Installs %in% c(10000,50000)] <- "10000-100000"
+g_apps7$Installs[g_apps7$Installs %in% c(100000,500000)] <- "100000-1000000"
+g_apps7$Installs[g_apps7$Installs %in% c(1000000,5000000,10000000,50000000, 100000000,500000000)] <- "1000000+"
+
+g_apps7$Installs <- as.factor(g_apps7$Installs)
+summary(g_apps7$Installs)
+install_tab <- table(g_apps7$Installs)
+install_ptab <- round(prop.table(install_tab), 2)
+install_ptab
+
+barplot(install_ptab, main = "Installs", xlab = "Number of Installs", ylab = "Proportion of Data", ylim = c(0,0.4), col = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"))
+legend("topright", fill = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"), legend = c("< 1k Installs", "1k-9.9k Installs", "10k-99k Installs", "100k-999k", "1M+ Installs"))
+box()
+
+```
+
+```{r Size}
+# -------- Size ----------#
+g_apps8 <- g_apps7
+summary(g_apps8$Size) # This variable cannot be numeric since "Varies with device" is a value
+
+# I'll add a new variable for size groupings
+vwd <- which(g_apps8$Size == "Varies with device")
+g_apps8.1 <- g_apps8[-vwd,]
+summary(g_apps8.1$Size)
+g_apps8.1$Size <- as.numeric(as.character(g_apps8.1$Size))
+str(g_apps8.1$Size)
+fivenum(g_apps8.1$Size) # minimum value is 3.1 so I'll set "Varies with device to 1
+
+g_apps8$Size <- as.character(g_apps8$Size)
+g_apps8$Size[g_apps8$Size == "Varies with device"] <- 1
+g_apps8$Size <- as.numeric(as.character(g_apps8$Size))
+g_apps8$Size.Groups <- cut(g_apps8$Size, breaks = c(0,3,4000000,8300000,19000000,334000000), labels = c("Varies with device", "0-4M",  "4M-8.3M", "8.3M-19M", "19M-334M"))
+summary(g_apps8$Size.Groups)
+
+sgtab <- table(g_apps8$Size.Groups)
+psgtab <- prop.table(sgtab)
+psgtab # groupings look proportionate aside from group 5 which is "Varies by device"
+
+barplot(psgtab, main = "App Size Groupings", col = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"), xlab = "Size Group", ylab = "Proportion", ylim = c(0,0.3))
+legend("topleft", fill = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"), legend = levels(g_apps8$Size.Groups))
+```
+
+```{r Price}
+g_apps9 <- g_apps8
+g_apps9$Price <- as.numeric(as.character(g_apps9$Price)) 
+summary(g_apps9$Price)
+pt <- table(as.factor(g_apps9$Price))
+ppt <- prop.table(pt)
+ppt # over 95% of apps in this dataset cost $0 to download (Free), I'll convert to a factor
+g_apps9$Price <- as.character(g_apps9$Price)
+g_apps9$Price[g_apps9$Price %in% "0"] <- "Free"
+g_apps9$Price[g_apps9$Price != "Free"] <- "Paid"
+ptab <- table(g_apps9$Price)
+pptab <- prop.table(ptab)
+pptab
+g_apps9$Price <- as.factor(g_apps9$Price)
+summary(g_apps9$Price) # 4.4% of apps cost money
+
+barplot(ptab, main = "Price of Apps", col = c("#00DCFF", "#F83648"), ylab = "Number of apps", xlab = "Type of App", ylim = c(0,250000))
+legend("topright", fill = c("#00DCFF", "#F83648"), legend = levels(g_apps9$Price))
+```
+
+```{r Content Rating}
+g_apps10 <- g_apps9
+summary(g_apps10$Content.Rating) 
+g_apps10$Content.Rating <- as.factor(g_apps10$Content.Rating)
+crtab <- table(g_apps10$Content.Rating)
+pcrtab <- prop.table(crtab)
+pcrtab 
+pie3D(crtab, explode = 0.1, main = "App Content Ratings", theta = 1.5,  labels = levels(g_apps10$Content.Rating), col = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"))
+
+# The groups are very disproportionate, lets group some together
+g_apps10$Content.Rating <- as.character(g_apps10$Content.Rating)
+g_apps10$Content.Rating[g_apps10$Content.Rating == "Everyone 10+"] <- "Mature"
+g_apps10$Content.Rating[g_apps10$Content.Rating == "Adults only 18+"] <- "Mature"
+g_apps10$Content.Rating[g_apps10$Content.Rating == "Teen"] <- "Mature"
+g_apps10$Content.Rating[g_apps10$Content.Rating == "Unrated"] <- "Mature"
+g_apps10$Content.Rating[g_apps10$Content.Rating == "Mature 17+"] <- "Mature"
+g_apps10$Content.Rating <- as.factor(g_apps10$Content.Rating)
+summary(g_apps10$Content.Rating)
+new_crtab <- table(g_apps10$Content.Rating)
+new_pcrtab <- prop.table(new_crtab)
+new_pcrtab
+pie3D(new_pcrtab, explode = 0.1, main = "App Content Ratings", theta = 1.5, col = c("#00DCFF", "#F83648"))
+legend("topright", legend = levels(g_apps10$Content.Rating), fill = c("#00DCFF", "#F83648"))
+
+g_apps11 <- g_apps10[,-c(10,11)] # Removed last and minimum versions because I won't be using those variables
+```
+
+
+
+## Bivariate Analysis
+
+```{r Ratings & Reviews}
+table(is.na(g_apps11$Rating)) # No missing values
+plot(g_apps11$Rating~g_apps11$Reviews, col = "black", main="Reviews vs App Ratings", 
+     xlab = "Log Reviews", 
+     ylab = "Ratings", pch=20,
+     xlim = c(0, 25))
+abline(lm(g_apps11$Rating~g_apps11$Reviews), col="#F83648", lwd=2.5)
+lines(lowess(g_apps11$Rating~g_apps11$Reviews), col="#00DCFF", lwd=2.5)
+
+library(corrplot)
+cor(g_apps11$Rating, g_apps11$Reviews) # Very weak negative coorelation 
+cormat <- cor(g_apps11[,c(3,4)])
+corrplot(cormat, method = "circle", addCoef.col = "red")
+cor.test(g_apps11$Rating, g_apps11$Reviews)
+```
+The results from the correlation test show that we can reject the Null hypothesis. There is a correlation between Ratings and Reviews, however the correlation is a very weak, negative one at -0.17.
+
+This also tells me that I can include both ratings and reviews in my regression model since multicollinearity is not an issue here. 
+
+Now I'll look at how each variable affects the target variable, Installs. 
+
+```{r Installs & Size}
+install_size <- table(g_apps11$Size.Groups, g_apps11$Installs)
+pinstall_size <- prop.table(install_size)
+pinstall_size <- round(pinstall_size,2)
+addmargins(pinstall_size,c(1,2))
+
+ptab_size <- prop.table(install_size, margin = 2)
+barplot(ptab_size, col = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"), main = "Installs vs Size", xlab = "Number of Installs", ylab = "Proportion")
+legend("topright", fill = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444"), legend = levels(g_apps11$Size.Groups))
+
+chisq.test(pinstall_size)
+```
+The results of the chi-squared test are higher that 0.05 so we will accept the null hypothesis. It seems that size of app has no effect on the number of installs an app receives.  This may actually be true if we assume that many consumers do not look at app size before downloading an app.  However, the small amount of data we have on "varies with device" could be the reason the p-value is a 1. More data would be needed to conduct a more succesful test. 
+
+```{r Installs & Rating}
+g_apps11 %>% group_by(Installs) %>% summarise(avg = mean(Rating), median = median(Rating), std = sd(Rating))
+boxplot(Rating~Installs, data = g_apps11, main="Boxplot of Ratings by Installs", xlab = "Install Group",
+        col = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444")) # Looks like apps with fewer intalls have a higher rating on average
+
+rat_install.aov <- aov(Rating~Installs, data = g_apps11)
+summary(rat_install.aov)
+TukeyHSD(rat_install.aov) # For coomparison of levels
+
+#verify ANOVA assumptions with diagnostic plots
+plot(rat_install.aov)
+```
+Here we can see that apps with fewer installs have higher ratings on average. This makes sense because apps with a high number of installs would have a large number of ratings. Each rating would carry less weight and at the same time a large number of people rating an app would likely introduce a wider range of ratings, driving the average rating down over time. 
+
+The p-value for the ANOVA test was low enough to reject the null hypothesis. 
+I also used diagnostics plots to verify that the ANOVA assumptions were correct. The data does have some outliers but in general the plots look good. More specifically, the Residuals vs. Fitted plot shows that there is homogeniety among variances as there is no relationship between the residuals of each group. The Normal Q-Q plot tells us that residuals are normally distributed. 
+
+```{r Installs & Reviews}
+g_apps11 %>% group_by(Installs) %>% summarise(avg = mean(Reviews), median = median(Reviews), std = sd(Reviews))
+boxplot(Reviews~Installs, data = g_apps11, main="Boxplot of Reviews by Installs",
+        col = c("#00DCFF", "#F83648", "#FFD800", "#04F075", "#444444")) # Looks fairly equaly, productivity has a slightly less rating.
+
+rev_installs.aov <- aov(Reviews~Installs, data = g_apps11)
+summary(rev_installs.aov)
+TukeyHSD(rev_installs.aov) # For coomparison of levels
+
+#verify ANOVA assumptions with diagnostic plots
+plot(rev_installs.aov) # we have outliers
+
+```
+As expected, the apps with over 1 million installs have the highest number of reviews on average and apps with fewer than 1,000 installs have the lowest number of reviews.  The p-value for the ANOVA test is low enough to make the assumption that these results are correct. Installs and Reviews have a positive relationship with each other. Diagnostic plots look good as well. 
+
+
+```{r Installs & Price}
+ptab <- table(g_apps11$Price, g_apps11$Installs)
+pptab <- prop.table(ptab)
+pptab <- round(pptab, 2)
+addmargins(pptab, c(1,2))
+
+ptab_price <- prop.table(ptab, margin = 2)
+barplot(ptab_price, col = c("#00DCFF", "#F83648"))
+legend("topright", legend = levels(g_apps11$Price), fill = c("#00DCFF", "#F83648")) # disproportionate so of course we expect this
+
+chisq.test(pptab)
+```
+The p-value for the chi-squared test is 0.99 which is high enough to reject the null. This may be due to the disproportionate amount of data available on the price of apps in the dataset. I will not make any conclusions about Installs compared to the Price of an app. 
+
+
+```{r Installs & Content Rating}
+crtab <- table(g_apps11$Content.Rating, g_apps11$Installs)
+crtab <- prop.table(crtab)
+pcrtab <- round(pptab, 2)
+addmargins(pcrtab, c(1,2))
+
+ptab_cr <- prop.table(crtab, margin = 2)
+barplot(ptab_cr, col = c("#00DCFF", "#F83648"))
+legend("topright", legend = levels(g_apps11$Content.Rating), fill = c("#00DCFF", "#F83648")) # disproportionate so of course we expect this
+
+chisq.test(pcrtab)
+```
+The p-value for the chi-squared test is 0.99 which is high enough to reject the null. This may be due to the disproportionate amount of data available on content rating in the dataset. I will not make any conclusions about Installs compared to the Content Rating of an app.
+
+```{r Installs & Category}
+cattab <- table(g_apps11$Category, g_apps11$Installs)
+pcattab <- prop.table(cattab)
+pcattab <- round(pcattab, 2)
+addmargins(pcattab, c(1,2))
+
+ptab_cat <- prop.table(cattab, margin = 2)
+barplot(ptab_cat, col = c("#00DCFF", "#F83648", "#FFD800", "#04F075"))
+legend("topright", legend = levels(g_apps11$Category), fill = c("#00DCFF", "#F83648", "#FFD800", "#04F075")) # disproportionate so of course we expect this
+
+chisq.test(pcattab)
+```
+The p-value for the chi-squared test is 1.  It seems that Category has no effect on the number of Installs an app receives. 
+
+
+## Hypothesis Testing
+
+```{r Rating & Category}
+
+# Hypothesis 1: Education apps will have higher ratings that all other apps on average.
+
+g_apps11 %>% group_by(Category) %>% summarise(avg = mean(Rating), median = median(Rating), std = sd(Rating))
+boxplot(Rating~Category, data = g_apps11, main="Boxplot of Ratings by Installs",
+        col = c("lightblue", "darkblue")) # Looks fairly equaly, productivity has a slightly less rating.
+
+rat_category.aov <- aov(Rating~Category, data = g_apps11)
+summary(rat_category.aov)
+TukeyHSD(rat_category.aov) # For coomparison of levels
+
+#verify ANOVA assumptions with diagnostic plots
+plot(rat_category.aov) # we have outliers
+```
+
+The results show that we can reject the null hypothesis. The Tukey pairwise test shows that there is a significant difference between the means of each category and Education apps actually do have higher ratings on average.
+Productivity apps have the lowest average rating of the 4 groups. Test results are significant.
+
+I also used diagnostics plots to verify that the ANOVA assumptions were correct. The data does have some outliers but in general the plots look good. More specifically, the Residuals vs. Fitted plot shows that there is homogeniety among variances as there is no relationship between the residuals of each group. The Normal Q-Q plot tells us that residuals are normally distributed. 
+
+
+```{r Reviews - Edu/Lifestyle}
+# Hypothesis 2: Education apps will have a higher number of reviews than Lifestyle apps
+life_reviews <- mean(g_apps11$Reviews[g_apps11$Category=="LIFESTYLE"])
+RC_Hypo <- t.test(g_apps11$Reviews[g_apps11$Category=="EDUCATION"],
+                 alternative="greater", 
+                 mu=life_reviews, 
+                 conf.level=0.95)
+RC_Hypo
+
+# Let's plot the difference
+Edu <- g_apps11$Reviews[g_apps11$Category =="EDUCATION"]
+Life <- g_apps11$Reviews[g_apps11$Category == "LIFESTYLE"]
+plot(density(Edu), main = "Difference between Education & Lifestyle Apps", lwd= 3, col= "coral", xlab = "Log of Reviews")
+lines(density(Life), col="darkgreen", lwd=3) 
+legend("topright", c("Education", "lifestyle"), col = c("coral", "darkgreen"), pch = c(19,19), cex = 0.8)
+
+```
+
+I will accept the null hypothesis for this test as the p-value is equal to 1. 
+
+
+
+
+```{r Ratings & Price}
+# Hypothesis 3: On average, Paid apps will be rated higher than free apps. 
+
+g_apps12 <- g_apps11
+g_apps12 %>% group_by(Price) %>% summarise(avg = mean(Rating), median = median(Rating), std = sd(Rating))
+boxplot(Rating~Price, data = g_apps12, main="Boxplot of Ratings by Installs",
+        col = c("lightgreen", "darkgreen")) #Very similar results
+
+rat_price.aov <- aov(Rating~Price, data=g_apps11)
+rat_price.aov
+summary(rat_price.aov)
+TukeyHSD(rat_price.aov)
+plot(rat_price.aov)
+```
+I will reject the null hypothesis for this test. There is a statistically significant differences between the ratings of free and paid apps. Paid apps actually have a higher rating on average than free apps. Diagnostics plots suggest that the ANOVA test results are valid. 
+
+```{r Reviews & Content Rating}
+# Hypothesis 4: Apps Rated Mature will have more reviews than apps for Everyone
+g_apps12 %>% group_by(Content.Rating) %>% summarise(avg = mean(Reviews), median = median(Reviews), std = sd(Reviews))
+boxplot(Reviews~Content.Rating, data = g_apps12, main = "Boxplot of # of Reviews by Content Rating", 
+        col=c("lightgreen", "darkgreen")) #Looks like mature apps get more reviews on average
+
+rev_content.aov <- aov(Reviews~Content.Rating, data=g_apps11)
+summary(rev_content.aov)
+TukeyHSD(rev_content.aov)
+plot(rev_content.aov)
+```
+
+I reject the null hypothesis for this test. Mature apps have higher reviews than apps for Everyone.
+
+```{r Reviews & Installs}
+
+# Hypothesis 5: Apps with higher number of Installs will have a higher number of reviews
+
+g_apps12$Installs <- as.character(g_apps12$Installs)
+g_apps12$InstallCat <- rep(NA, nrow(g_apps12))
+g_apps12$InstallCat[g_apps12$Installs %in% c("100000-1000000","1000000+")] <- "High"
+g_apps12$InstallCat[g_apps12$Installs %in% c("10000-100000","1000-10000","0-500")] <- "Low"
+g_apps12$InstallCat <- as.factor(g_apps12$InstallCat)
+g_apps12$Installs <- as.factor(g_apps12$Installs)
+summary(g_apps12$InstallCat)
+
+low_mean <- mean(g_apps12$Reviews[g_apps12$InstallCat == "Low"])
+
+RI_Hypo <- t.test(g_apps12$Reviews[g_apps12$InstallCat=="High"],
+                 alternative="greater", 
+                 mu=low_mean, 
+                 conf.level=0.95)
+RI_Hypo
+
+
+# Let's plot the difference
+High_Installs <- g_apps12$Reviews[g_apps12$InstallCat =="High"]
+Low_Installs <- g_apps12$Reviews[g_apps12$InstallCat == "Low"]
+plot(density(High_Installs), main = "Number of Reviews for High & Low Apps", lwd= 3, col= "coral", xlab = "Log of Reviews")
+lines(density(Low_Installs), col="darkgreen", lwd=3) 
+legend("topright", c("High Installs", "Low Installs"), col = c("coral", "darkgreen"), pch = c(19,19), cex = 0.8)
+
+```
+Test results show that we can reject the null hypothesis. Apps with higher installs recieve more reviews on average. 
+
+I will also use this created category for logistic regression to determine what variables are best for predicting whether or not an app will recieve a high or low amount of downloads. 
+
+
+## Regression
+```{r Simple Logistic Regression - Ratings & Installs}
+options(scipen = 99)
+g_apps13 <- g_apps12
+
+g_mod0 <- glm(InstallCat~1, data = g_apps13, family = "binomial")
+g_mod <- glm(InstallCat ~ Rating, data=g_apps13, family = "binomial")
+summary(g_mod)$coef
+
+1-logLik(g_mod)/logLik(g_mod0)# Using a calculation for McFaddens R Squared to figure out how much of the variance can be explained by this model.
+
+```
+I start with simple logistic regression to determine if ratings alone would be a good predictor for installs. The coefficient for rating shows a positive relationship between these two variables.  As the rating of an app increases, the log likelihood that the number of Install will increase also increases. These results are statistically significant witha p-value less than 0.05.
+
+By using McFadsdens R squared calculation for logistic regression, I see that the simple logistic regression model only explains about 1% of the variance in Installs. I will need a multiple logistic regression model to improve accuracy.
+
+
+```{r Multiple Logistic Regression}
+
+null <- glm(Installs ~ 1, data = g_apps13, family = "binomial") # first model
+full <- glm(Installs ~ Category + Reviews + Rating + Size.Groups + Price + Content.Rating, data= g_apps13, family = "binomial") # second model
+step(null, scope=list(lower=null, upper=full), direction="forward") # forward selection
+step(full, data=g_apps13, direction="backward") # backward selection
+step(null, scope = list(upper=full), data=g_apps13, direction="both") # Stepwise selection
+
+1-logLik(full)/logLik(null) # Using a calculation for McFaddens R Squared to figure out how much of the variance can be explained by this model.
+
+```
+
+I used forward selection, backwards elimination and stepwise regression to find the best model for Installs prediction.  Each method returned the same model with the same AIC value of 89460.  The final model below uses all relevant variables in the dataset however, McFaddens R squared calculation shows that it only explains about 58% of the variance in the Install variable.  
+
+```{r Final Model}
+
+final <- glm(formula = Installs ~ Reviews + Price + Rating + Category + 
+    Size.Groups + Content.Rating, family = "binomial", data = g_apps13)
+summary(final)
+```
+As we can see in the final model, all variables included in the model are statistically significant. Test data can be introduced to make predictions and test the accuracy of the model but that is beyond the scope of this project. As of right now the McFaddens R squared calcuation shows that the model explains 58% of the variance in Installs. I could also change the probability threshold to be greater than 0.5 and see if that improves the model accuracy.  
+
+In sum, we see that all models used in this dataset were important in predicting the amount of install an app would receive. More data on these apps could be included in the data to balance out some of the disproportionate variable and  make a more accurate prediction. App developers could also benefit from more data on metrics that explain consumers are using these apps once they have been installed.  Further analysis is needed but the analysis in this report is a great start. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
